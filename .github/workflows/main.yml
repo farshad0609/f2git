@@ -1,31 +1,52 @@
-import os
-import requests
-from urllib.parse import urlparse
+name: Download, Zip, and Release
 
-OUTPUT_DIR = "downloads"
+on:
+  workflow_dispatch:
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+jobs:
+  process:
+    runs-on: ubuntu-latest
 
-with open("link.txt", "r") as f:
-    links = [line.strip() for line in f if line.strip()]
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-for i, link in enumerate(links):
-    parsed = urlparse(link)
-    filename = os.path.basename(parsed.path)
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    if not filename:
-        filename = f"file_{i}"
+      - name: Install dependencies
+        run: pip install requests
 
-    path = os.path.join(OUTPUT_DIR, filename)
+      - name: Run downloader
+        run: python download.py
 
-    print(f"Downloading {link} ...")
+      # 🧹 حذف ریلیزهای قبلی
+      - name: Delete old releases
+        run: |
+          gh release list | awk '{print $1}' | while read tag; do
+            gh release delete "$tag" -y
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    r = requests.get(link, stream=True)
-    r.raise_for_status()
+      # 📦 ساخت ZIP با پسورد
+      - name: Zip files with password
+        run: |
+          mkdir zipped
+          i=1
+          for file in downloads/*; do
+            zip -j -P github "zipped/$i.zip" "$file"
+            i=$((i+1))
+          done
 
-    with open(path, "wb") as f:
-        for chunk in r.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
-
-print("Download complete.")
+      # 🚀 ساخت Release
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: release-${{ github.run_number }}
+          name: Auto Release ${{ github.run_number }}
+          files: zipped/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
