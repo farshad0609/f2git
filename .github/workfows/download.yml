@@ -1,35 +1,31 @@
-name: Download and Release
+import os
+import requests
+from urllib.parse import urlparse
 
-on:
-  workflow_dispatch:  # دستی اجرا کنی
-  push:
-    paths:
-      - 'link.txt'
+OUTPUT_DIR = "downloads"
 
-jobs:
-  download:
-    runs-on: ubuntu-latest
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+with open("link.txt", "r") as f:
+    links = [line.strip() for line in f if line.strip()]
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+for i, link in enumerate(links):
+    parsed = urlparse(link)
+    filename = os.path.basename(parsed.path)
 
-      - name: Install dependencies
-        run: pip install requests
+    if not filename:
+        filename = f"file_{i}"
 
-      - name: Run downloader
-        run: python download.py
+    path = os.path.join(OUTPUT_DIR, filename)
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: release-${{ github.run_number }}
-          name: Auto Release ${{ github.run_number }}
-          files: downloads/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    print(f"Downloading {link} ...")
+
+    r = requests.get(link, stream=True)
+    r.raise_for_status()
+
+    with open(path, "wb") as f:
+        for chunk in r.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+
+print("Download complete.")
