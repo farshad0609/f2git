@@ -41,7 +41,7 @@ def download_file(index, link):
 
         except Exception as e:
             print(f"[{index}] ❌ Error (attempt {attempt}): {e}")
-            time.sleep(2 * attempt)  # backoff
+            time.sleep(2 * attempt)
 
     print(f"[{index}] 🚫 Failed after {MAX_RETRIES} attempts")
     return False
