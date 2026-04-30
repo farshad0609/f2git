@@ -22,26 +22,35 @@ jobs:
       - name: Run downloader
         run: python download.py
 
-      # 🧹 حذف ریلیزهای قبلی
+      # 🧹 حذف releaseهای قبلی (fail-safe)
       - name: Delete old releases
         run: |
-          gh release list | awk '{print $1}' | while read tag; do
-            gh release delete "$tag" -y
-          done
+          releases=$(gh release list | awk '{print $1}')
+          if [ -z "$releases" ]; then
+            echo "No releases to delete"
+          else
+            echo "$releases" | while read tag; do
+              echo "Deleting $tag"
+              gh release delete "$tag" -y || true
+            done
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 📦 ساخت ZIP با پسورد
+      # 📦 ساخت zip با پسورد فقط برای فایل‌های واقعی
       - name: Zip files with password
         run: |
           mkdir zipped
           i=1
           for file in downloads/*; do
-            zip -j -P github "zipped/$i.zip" "$file"
-            i=$((i+1))
+            if [ -f "$file" ]; then
+              echo "Zipping $file -> $i.zip"
+              zip -j -P github "zipped/$i.zip" "$file"
+              i=$((i+1))
+            fi
           done
 
-      # 🚀 ساخت Release
+      # 🚀 ساخت release
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
