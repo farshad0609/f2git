@@ -40,15 +40,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 📦 ساخت ZIP تکی
+      # 📦 ساخت ZIP تکی (بدون فولدر downloads)
       - name: Create single ZIP
-        run: |
-          mkdir zipped
-          - name: Create single ZIP
         run: |
           mkdir zipped
           cd downloads
           zip -r -P github ../zipped/all.zip .
+
       # 🚀 ساخت Release
       - name: Create Release
         uses: softprops/action-gh-release@v2
