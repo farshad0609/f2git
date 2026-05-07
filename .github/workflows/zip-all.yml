@@ -1,0 +1,60 @@
+name: Download and Create Single ZIP
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run downloader
+        run: python download_all.py
+
+      # 🧹 حذف releaseهای قبلی
+      - name: Delete old releases
+        run: |
+          releases=$(gh release list | awk '{print $1}')
+          if [ -z "$releases" ]; then
+            echo "No releases to delete"
+          else
+            echo "$releases" | while read tag; do
+              echo "Deleting $tag"
+              gh release delete "$tag" -y || true
+            done
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 📦 ساخت ZIP تکی
+      - name: Create single ZIP
+        run: |
+          mkdir zipped
+          - name: Create single ZIP
+        run: |
+          mkdir zipped
+          cd downloads
+          zip -r -P github ../zipped/all.zip .
+      # 🚀 ساخت Release
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: release-${{ github.run_number }}
+          name: Single ZIP Release ${{ github.run_number }}
+          files: zipped/all.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
