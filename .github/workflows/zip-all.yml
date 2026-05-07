@@ -1,4 +1,4 @@
-name: Single ZIP
+name: Download and Create Single ZIP
 
 on:
   workflow_dispatch:
@@ -37,7 +37,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 📦 ساخت ZIP فقط اگر فایل وجود داشت
+      # 📦 ساخت ZIP تکی با اسم زمان
       - name: Create single ZIP
         run: |
           mkdir -p zipped
@@ -47,16 +47,18 @@ jobs:
             exit 0
           fi
 
-          cd downloads
-          zip -r -P github ../zipped/all.zip .
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
-      # 🚀 ساخت Release فقط اگر ZIP وجود داشت
+          cd downloads
+          zip -r -P github "../zipped/${TIMESTAMP}.zip" .
+
+      # 🚀 ساخت Release
       - name: Create Release
-        if: hashFiles('zipped/all.zip') != ''
+        if: hashFiles('zipped/*.zip') != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: release-${{ github.run_number }}
           name: Single ZIP Release ${{ github.run_number }}
-          files: zipped/all.zip
+          files: zipped/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
