@@ -1,4 +1,4 @@
-name: Download and Create Single ZIP
+name: Single ZIP
 
 on:
   workflow_dispatch:
