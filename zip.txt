@@ -1,3 +1,2 @@
-https://github.com/j-hc/revanced-magisk-module/releases/download/20221055/music-morphe-v8.47.56-arm64-v8a.apk
-https://github.com/j-hc/revanced-magisk-module/releases/download/20221055/youtube-morphe-v20.47.62-all.apk
-https://github.com/j-hc/revanced-magisk-module/releases/download/20221055/youtube-morphe-module-v20.47.62-all.zip
+https://github.com/patterniha/MITM-DomainFronting/archive/refs/tags/v9.zip
+https://github.com/patterniha/MITM-DomainFronting/archive/refs/tags/v8.zip
