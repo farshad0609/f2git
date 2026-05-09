@@ -37,8 +37,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 📦 ساخت ZIP تکی با اسم زمان
+      # 📦 ساخت ZIP رمزدار
       - name: Create single ZIP
+        env:
+          ZIP_PASSWORD: ${{ secrets.ZIP_PASSWORD }}
         run: |
           mkdir -p zipped
 
@@ -50,7 +52,7 @@ jobs:
           TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
           cd downloads
-          zip -r -P github "../zipped/${TIMESTAMP}.zip" .
+          zip -r -P "$ZIP_PASSWORD" "../zipped/${TIMESTAMP}.zip" .
 
       # 🚀 ساخت Release
       - name: Create Release
