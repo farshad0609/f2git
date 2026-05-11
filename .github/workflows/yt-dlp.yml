@@ -1,4 +1,4 @@
-name: Smart Media Downloader
+name: YouTube
 
 on:
   workflow_dispatch:
