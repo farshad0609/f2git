@@ -1,4 +1,4 @@
-name: yt-dlp Download and ZIP
+name: yt-dlp Download + x265 Encode + ZIP
 
 on:
   workflow_dispatch:
@@ -20,11 +20,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      # 📦 نصب yt-dlp
-      - name: Install yt-dlp
+      # 📦 نصب yt-dlp و ffmpeg
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -U yt-dlp
+          sudo apt update
+          sudo apt install -y ffmpeg zip
 
       # 🎬 دانلود فایل‌ها
       - name: Download videos
@@ -40,6 +42,42 @@ jobs:
             --retries 3 \
             --fragment-retries 3 \
             --concurrent-fragments 5
+
+      # 🎞️ Encode به x265
+      - name: Encode videos to x265
+        run: |
+          mkdir -p encoded
+
+          find downloads -type f | while read file; do
+
+            ext="${file##*.}"
+
+            case "$ext" in
+              mp4|mkv|webm|mov|avi|flv)
+                filename=$(basename "$file")
+                output="encoded/${filename%.*}_x265.mp4"
+
+                echo "Encoding: $filename"
+
+                ffmpeg -y \
+                  -i "$file" \
+                  -c:v libx265 \
+                  -preset fast \
+                  -crf 28 \
+                  -c:a aac \
+                  -b:a 128k \
+                  "$output"
+
+                echo "Removing original: $file"
+                rm -f "$file"
+                ;;
+              *)
+                echo "Skipping non-video: $file"
+                cp "$file" encoded/
+                ;;
+            esac
+
+          done
 
       # 🧹 حذف releaseهای قبلی
       - name: Delete old releases
@@ -60,17 +98,17 @@ jobs:
         run: |
           mkdir -p zipped
 
-          if [ "$(find downloads -type f | wc -l)" -eq 0 ]; then
-            echo "No files downloaded."
+          if [ "$(find encoded -type f | wc -l)" -eq 0 ]; then
+            echo "No files found."
             exit 0
           fi
 
           TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
-          cd downloads
+          cd encoded
           zip -r -P "$ZIP_PASSWORD" "../zipped/${TIMESTAMP}.zip" .
 
-      # 🚀 ساخت Release
+      # 🚀 Release
       - name: Create Release
         if: hashFiles('zipped/*.zip') != ''
         uses: softprops/action-gh-release@v2
