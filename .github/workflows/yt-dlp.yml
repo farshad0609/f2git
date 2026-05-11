@@ -1,397 +1,145 @@
-name: Smart Media Downloader
-
-on:
-  workflow_dispatch:
-    inputs:
-
-      download_engine:
-        description: "Download Engine"
-        required: true
-        type: string
-        options:
-          - yt-dlp
-          - ytconvert
-        default: yt-dlp
-
-      quality:
-        description: "Preferred Quality"
-        required: true
-        type: choice
-        options:
-          - 480
-          - 720
-          - 1080
-          - best
-        default: 480
-
-      encode_mode:
-        description: "Encoding Mode"
-        required: true
-        type: choice
-        options:
-          - disabled
-          - x265-veryfast
-          - x264-lite
-          - x264-540p
-        default: x265-veryfast
-
-      min_size_mb:
-        description: "Minimum file size for encode (MB)"
-        required: true
-        default: "350"
-
-permissions:
-  contents: write
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
-jobs:
-  process:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -U yt-dlp requests
-
-          sudo apt update
-
-          sudo apt install -y \
-            ffmpeg \
-            zip \
-            jq \
-            mediainfo
-
-      ##################################################
-      # DOWNLOAD
-      ##################################################
-
-      - name: Download Media
-        env:
-          ENGINE: ${{ github.event.inputs.download_engine }}
-          QUALITY: ${{ github.event.inputs.quality }}
-        run: |
-
-          mkdir -p downloads
-
-          while read url; do
-
-            [ -z "$url" ] && continue
-
-            echo "=================================="
-            echo "Processing: $url"
-            echo "=================================="
-
-            ##################################################
-            # YTCONVERT MODE
-            ##################################################
-
-            if [[ "$ENGINE" == "ytconvert" && "$url" == *"youtube.com"* || "$url" == *"youtu.be"* ]]; then
-
-              echo "Using ytconvert..."
-
-              python3 << EOF
-
-import requests
-import time
-import re
-import os
-import sys
-
-url = """$url"""
-quality = """$QUALITY"""
-
-payload = {
-    "url": url,
-    "os": "linux",
-    "output": {
-        "type": "video",
-        "format": "mp4",
-        "quality": quality + "p" if quality != "best" else "720p"
-    }
-}
-
-s = requests.Session()
-
-s.headers.update({
-    "User-Agent": "Mozilla/5.0"
-})
-
-s.get("https://media.ytmp3.gg/")
-
-resp = s.post(
-    "https://hub.ytconvert.org/api/download",
-    json=payload,
-    timeout=30
-)
-
-resp.raise_for_status()
-
-data = resp.json()
-
-status_url = data.get("statusUrl")
-
-if not status_url:
-    print("No statusUrl")
-    sys.exit(1)
-
-for i in range(120):
-
-    time.sleep(2)
-
-    r = s.get(status_url, timeout=20)
-    status = r.json()
-
-    if status.get("status") == "completed":
-
-        dl = status.get("downloadUrl")
-
-        if not dl:
-            print("No download URL")
-            sys.exit(1)
-
-        title = re.sub(r'[^a-zA-Z0-9._-]', '_',
-            data.get("title", "video"))[:80]
-
-        path = f"downloads/{title}.mp4"
-
-        rr = s.get(dl, stream=True)
-
-        with open(path, "wb") as f:
-            for chunk in rr.iter_content(chunk_size=1024*1024):
-                if chunk:
-                    f.write(chunk)
-
-        print("Downloaded:", path)
-        sys.exit(0)
-
-    if status.get("status") == "failed":
-        print("Failed")
-        sys.exit(1)
-
-print("Timeout")
-sys.exit(1)
-
-EOF
-
-            ##################################################
-            # YT-DLP MODE
-            ##################################################
-
-            else
-
-              echo "Using yt-dlp..."
-
-              if [[ "$QUALITY" == "best" ]]; then
-                FORMAT="bestvideo+bestaudio/best"
-              else
-                FORMAT="bestvideo[height<=${QUALITY}]+bestaudio/best[height<=${QUALITY}]/best"
-              fi
-
-              yt-dlp \
-                -f "$FORMAT" \
-                --merge-output-format mp4 \
-                --restrict-filenames \
-                --concurrent-fragments 5 \
-                --retries 3 \
-                --fragment-retries 3 \
-                -o "downloads/%(title).100s.%(ext)s" \
-                "$url"
-
-            fi
-
-          done < yt.txt
-
-      ##################################################
-      # ENCODE
-      ##################################################
-
-      - name: Encode Videos
-        env:
-          ENCODE_MODE: ${{ github.event.inputs.encode_mode }}
-          MIN_SIZE_MB: ${{ github.event.inputs.min_size_mb }}
-        run: |
-
-          mkdir -p encoded
-
-          if [[ "$ENCODE_MODE" == "disabled" ]]; then
-
-            echo "Encoding disabled."
-
-            cp downloads/* encoded/ 2>/dev/null || true
-
-            exit 0
-
+name: Smart Media Pipeline
+
+on: workflow_dispatch: inputs:
+
+download_engine:
+    description: "Download engine"
+    required: true
+    type: choice
+    options:
+      - yt-dlp
+      - ytconvert
+    default: yt-dlp
+
+  quality:
+    description: "Preferred quality"
+    required: true
+    type: choice
+    options:
+      - "480"
+      - "720"
+      - "1080"
+      - best
+    default: "480"
+
+  encode_mode:
+    description: "Encode mode"
+    required: true
+    type: choice
+    options:
+      - disabled
+      - x265-veryfast
+      - x264-lite
+      - x264-540p
+    default: x265-veryfast
+
+  min_size_mb:
+    description: "Minimum size for encoding (MB)"
+    required: true
+    default: "350"
+
+permissions: contents: write
+
+jobs: build: runs-on: ubuntu-latest timeout-minutes: 120
+
+steps:
+
+  - name: Checkout
+    uses: actions/checkout@v4
+
+  - name: Setup tools
+    run: |
+      sudo apt-get update
+      sudo apt-get install -y ffmpeg zip jq
+      pip install -U yt-dlp requests
+
+  - name: Download files
+    run: |
+      mkdir -p downloads
+
+      while read url; do
+        [ -z "$url" ] && continue
+
+        echo "Downloading: $url"
+
+        if [[ "${{ github.event.inputs.download_engine }}" == "yt-dlp" ]]; then
+
+          if [[ "${{ github.event.inputs.quality }}" == "best" ]]; then
+            FORMAT="bestvideo+bestaudio/best"
+          else
+            FORMAT="bestvideo[height<=${{ github.event.inputs.quality }}]+bestaudio/best[height<=${{ github.event.inputs.quality }}]/best"
           fi
 
-          find downloads -type f | while read file; do
+          yt-dlp -f "$FORMAT" \
+            --merge-output-format mp4 \
+            -o "downloads/%(title).80s.%(ext)s" "$url"
 
-            ext="${file##*.}"
+        else
+          echo "ytconvert mode (simple fallback)"
+          yt-dlp -o "downloads/%(title).80s.%(ext)s" "$url"
+        fi
 
-            case "$ext" in
-              mp4|mkv|webm|mov|avi|flv)
-                ;;
-              *)
-                echo "Skipping non-video: $file"
-                cp "$file" encoded/
-                continue
-                ;;
-            esac
+      done < yt.txt
 
-            SIZE_MB=$(du -m "$file" | cut -f1)
+  - name: Encode videos
+    run: |
+      mkdir -p encoded
 
-            echo "File size: ${SIZE_MB}MB"
+      MODE="${{ github.event.inputs.encode_mode }}"
+      MIN_SIZE=${{ github.event.inputs.min_size_mb }}
 
-            if [[ "$SIZE_MB" -lt "$MIN_SIZE_MB" ]]; then
+      for file in downloads/*; do
 
-              echo "Skipping encode (small file)"
+        [ -f "$file" ] || continue
 
-              cp "$file" encoded/
+        size_mb=$(du -m "$file" | cut -f1)
 
-              continue
+        if [[ "$MODE" == "disabled" ]]; then
+          cp "$file" encoded/
+          continue
+        fi
 
-            fi
+        if [[ "$size_mb" -lt "$MIN_SIZE" ]]; then
+          cp "$file" encoded/
+          continue
+        fi
 
-            BITRATE=$(ffprobe \
-              -v error \
-              -select_streams v:0 \
-              -show_entries stream=bit_rate \
-              -of default=noprint_wrappers=1:nokey=1 \
-              "$file")
+        bitrate=$(ffprobe -v error -select_streams v:0 \
+          -show_entries stream=bit_rate -of default=nk=1:nw=1 "$file")
 
-            BITRATE=${BITRATE:-0}
+        bitrate_k=$((bitrate/1000))
 
-            BITRATE_K=$((BITRATE / 1000))
+        if [[ "$bitrate_k" -lt 900 ]]; then
+          cp "$file" encoded/
+          continue
+        fi
 
-            echo "Bitrate: ${BITRATE_K}kbps"
+        name=$(basename "$file")
+        out="encoded/${name%.*}_enc.mp4"
 
-            if [[ "$BITRATE_K" -lt 900 ]]; then
+        if [[ "$MODE" == "x265-veryfast" ]]; then
+          ffmpeg -y -i "$file" -c:v libx265 -preset veryfast -crf 28 -c:a aac "$out"
 
-              echo "Skipping encode (low bitrate)"
+        elif [[ "$MODE" == "x264-lite" ]]; then
+          ffmpeg -y -i "$file" -c:v libx264 -preset veryfast -b:v 1000k -c:a aac "$out"
 
-              cp "$file" encoded/
+        elif [[ "$MODE" == "x264-540p" ]]; then
+          ffmpeg -y -i "$file" -vf scale=-2:540 -c:v libx264 -preset veryfast -b:v 900k -c:a aac "$out"
+        fi
 
-              continue
+      done
 
-            fi
+  - name: Create zip
+    run: |
+      mkdir -p out
+      ts=$(date +"%Y%m%d_%H%M%S")
 
-            filename=$(basename "$file")
+      zip -r -P "${{ secrets.ZIP_PASSWORD }}" "out/$ts.zip" encoded/
 
-            output="encoded/${filename%.*}_encoded.mp4"
-
-            ##################################################
-            # X265
-            ##################################################
-
-            if [[ "$ENCODE_MODE" == "x265-veryfast" ]]; then
-
-              ffmpeg -y \
-                -i "$file" \
-                -c:v libx265 \
-                -preset veryfast \
-                -crf 28 \
-                -c:a aac \
-                -b:a 128k \
-                "$output"
-
-            ##################################################
-            # X264 LITE
-            ##################################################
-
-            elif [[ "$ENCODE_MODE" == "x264-lite" ]]; then
-
-              ffmpeg -y \
-                -i "$file" \
-                -c:v libx264 \
-                -preset veryfast \
-                -b:v 1000k \
-                -maxrate 1000k \
-                -bufsize 2000k \
-                -c:a aac \
-                -b:a 128k \
-                "$output"
-
-            ##################################################
-            # X264 540P
-            ##################################################
-
-            elif [[ "$ENCODE_MODE" == "x264-540p" ]]; then
-
-              ffmpeg -y \
-                -i "$file" \
-                -vf scale=-2:540 \
-                -c:v libx264 \
-                -preset veryfast \
-                -b:v 900k \
-                -maxrate 900k \
-                -bufsize 1800k \
-                -c:a aac \
-                -b:a 96k \
-                "$output"
-
-            fi
-
-          done
-
-      ##################################################
-      # DELETE OLD RELEASES
-      ##################################################
-
-      - name: Delete old releases
-        run: |
-          gh release list --json tagName -q '.[].tagName' | while read tag; do
-            if [ ! -z "$tag" ]; then
-              echo "Deleting release: $tag"
-              gh release delete "$tag" -y || true
-            fi
-          done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      ##################################################
-      # ZIP
-      ##################################################
-
-      - name: Create ZIP
-        env:
-          ZIP_PASSWORD: ${{ secrets.ZIP_PASSWORD }}
-        run: |
-
-          mkdir -p zipped
-
-          if [ "$(find encoded -type f | wc -l)" -eq 0 ]; then
-            echo "No files found."
-            exit 1
-          fi
-
-          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-
-          cd encoded
-
-          zip -r -P "$ZIP_PASSWORD" \
-            "../zipped/${TIMESTAMP}.zip" .
-
-      ##################################################
-      # RELEASE
-      ##################################################
-
-      - name: Upload Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: media-${{ github.run_number }}
-          name: Media Release ${{ github.run_number }}
-          files: zipped/*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  - name: Upload release
+    uses: softprops/action-gh-release@v2
+    with:
+      tag_name: media-${{ github.run_number }}
+      files: out/*.zip
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
