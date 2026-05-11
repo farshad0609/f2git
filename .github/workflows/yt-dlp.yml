@@ -7,7 +7,7 @@ on:
       download_engine:
         description: "Download Engine"
         required: true
-        type: choice
+        type: string
         options:
           - yt-dlp
           - ytconvert
