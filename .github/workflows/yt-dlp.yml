@@ -69,20 +69,9 @@ jobs:
             fi
 
             yt-dlp \
-              --force-generic-extractor \
-              --add-header "User-Agent: Mozilla/5.0" \
-              --referer "$url" \
-              --no-check-certificates \
-              --extractor-retries 5 \
-              --fragment-retries 5 \
-              --retry-sleep 5 \
-              --socket-timeout 30 \
-              --no-continue \
-              --no-part \
-              --playlist-items 1 \
-              --no-playlist \
               -f "$FORMAT" \
               --merge-output-format mp4 \
+              --no-part \
               --restrict-filenames \
               -o "downloads/%(title).80s.%(ext)s" \
               "$url"
