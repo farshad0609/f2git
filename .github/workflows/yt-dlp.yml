@@ -3,7 +3,6 @@ name: Smart Media Pipeline
 on:
   workflow_dispatch:
     inputs:
-
       download_engine:
         description: "Download engine"
         required: true
@@ -49,9 +48,7 @@ jobs:
     timeout-minutes: 120
 
     steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup tools
         run: |
@@ -63,23 +60,24 @@ jobs:
         run: |
           mkdir -p downloads
 
+          ENGINE="${{ github.event.inputs.download_engine }}"
+          QUALITY="${{ github.event.inputs.quality }}"
+
           while read url; do
             [ -z "$url" ] && continue
 
             echo "Downloading: $url"
 
-            ENGINE="${{ github.event.inputs.download_engine }}"
-            QUALITY="${{ github.event.inputs.quality }}"
-
-            ########################################
-            # YTCONVERT (YouTube only)
-            ########################################
-            if [[ "$ENGINE" == "ytconvert" && ( "$url" == *"youtube.com"* || "$url" == *"youtu.be"* ) ]]; then
+            if [[ "$ENGINE" == "ytconvert" && ( "$url" == *youtube.com* || "$url" == *youtu.be* ) ]]; then
 
               echo "Using ytconvert API..."
 
-              python3 << 'EOF'
-import requests, time, re, os, sys
+              URL="$url" QUALITY="$QUALITY" python3 - <<'EOF'
+import os
+import time
+import re
+import requests
+import sys
 
 url = os.environ.get("URL")
 quality = os.environ.get("QUALITY")
@@ -95,53 +93,63 @@ payload = {
 }
 
 s = requests.Session()
-s.headers.update({"User-Agent": "Mozilla/5.0"})
+s.headers.update({
+    "User-Agent": "Mozilla/5.0"
+})
 
-try:
-    s.get("https://media.ytmp3.gg/")
-    r = s.post("https://hub.ytconvert.org/api/download", json=payload, timeout=30)
-    r.raise_for_status()
-    data = r.json()
+s.get("https://media.ytmp3.gg/")
 
-    status_url = data.get("statusUrl")
+r = s.post(
+    "https://hub.ytconvert.org/api/download",
+    json=payload,
+    timeout=30
+)
 
-    for _ in range(120):
-        time.sleep(2)
-        res = s.get(status_url, timeout=20).json()
-        if res.get("status") == "completed":
-            dl = res.get("downloadUrl")
-            title = re.sub(r'[^a-zA-Z0-9_-]', '_', data.get("title", "video"))[:80]
-            path = f"downloads/{title}.mp4"
+r.raise_for_status()
 
-            r2 = s.get(dl, stream=True)
-            with open(path, "wb") as f:
-                for chunk in r2.iter_content(1024*1024):
-                    if chunk:
-                        f.write(chunk)
+data = r.json()
 
-            print("DONE")
-            sys.exit(0)
+status_url = data.get("statusUrl")
 
-        if res.get("status") == "failed":
-            print("FAILED")
-            sys.exit(1)
+for _ in range(120):
+    time.sleep(2)
 
-except Exception as e:
-    print("YTCONVERT ERROR:", e)
-    sys.exit(1)
+    res = s.get(status_url).json()
+
+    if res.get("status") == "completed":
+
+        dl = res.get("downloadUrl")
+
+        title = re.sub(
+            r'[^a-zA-Z0-9_-]',
+            '_',
+            data.get("title", "video")
+        )[:80]
+
+        path = f"downloads/{title}.mp4"
+
+        r2 = s.get(dl, stream=True)
+
+        with open(path, "wb") as f:
+            for c in r2.iter_content(1024 * 1024):
+                if c:
+                    f.write(c)
+
+        print("DONE")
+        sys.exit(0)
+
+    if res.get("status") == "failed":
+        print("FAILED")
+        sys.exit(1)
 
 EOF
 
             else
 
-              ########################################
-              # YT-DLP (ALL SITES INCLUDING YOUTUBE)
-              ########################################
-
               if [[ "$QUALITY" == "best" ]]; then
                 FORMAT="bestvideo+bestaudio/best"
               else
-                FORMAT="bestvideo[height<=${QUALITY}]+bestaudio/best[height<=${QUALITY}]/best"
+                FORMAT="bestvideo[height<=$QUALITY]+bestaudio/best[height<=$QUALITY]/best"
               fi
 
               yt-dlp \
@@ -156,65 +164,77 @@ EOF
 
           done < yt.txt
 
-      - name: Encode videos
+      - name: Encode
         run: |
           mkdir -p encoded
 
           MODE="${{ github.event.inputs.encode_mode }}"
-          MIN_SIZE=${{ github.event.inputs.min_size_mb }}
+          MIN="${{ github.event.inputs.min_size_mb }}"
 
-          for file in downloads/*; do
+          for f in downloads/*; do
 
-            [ -f "$file" ] || continue
+            [ -f "$f" ] || continue
 
-            size_mb=$(du -m "$file" | cut -f1)
+            size=$(du -m "$f" | cut -f1)
 
-            if [[ "$MODE" == "disabled" ]]; then
-              cp "$file" encoded/
+            if [[ "$MODE" == "disabled" || "$size" -lt "$MIN" ]]; then
+              cp "$f" encoded/
               continue
             fi
 
-            if [[ "$size_mb" -lt "$MIN_SIZE" ]]; then
-              cp "$file" encoded/
-              continue
-            fi
-
-            bitrate=$(ffprobe -v error -select_streams v:0 \
-              -show_entries stream=bit_rate -of default=nk=1:nw=1 "$file")
-
-            bitrate_k=$((bitrate/1000))
-
-            if [[ "$bitrate_k" -lt 900 ]]; then
-              cp "$file" encoded/
-              continue
-            fi
-
-            name=$(basename "$file")
-            out="encoded/${name%.*}_enc.mp4"
+            base=$(basename "$f")
+            out="encoded/${base%.*}.mp4"
 
             if [[ "$MODE" == "x265-veryfast" ]]; then
-              ffmpeg -y -i "$file" -c:v libx265 -preset veryfast -crf 28 -c:a aac "$out"
+
+              ffmpeg -y \
+                -i "$f" \
+                -c:v libx265 \
+                -preset veryfast \
+                -crf 28 \
+                -c:a aac \
+                "$out"
 
             elif [[ "$MODE" == "x264-lite" ]]; then
-              ffmpeg -y -i "$file" -c:v libx264 -preset veryfast -b:v 1000k -c:a aac "$out"
 
-            elif [[ "$MODE" == "x264-540p" ]]; then
-              ffmpeg -y -i "$file" -vf scale=-2:540 -c:v libx264 -preset veryfast -b:v 900k -c:a aac "$out"
+              ffmpeg -y \
+                -i "$f" \
+                -c:v libx264 \
+                -preset veryfast \
+                -b:v 1000k \
+                -c:a aac \
+                "$out"
+
+            else
+
+              ffmpeg -y \
+                -i "$f" \
+                -vf scale=-2:540 \
+                -c:v libx264 \
+                -preset veryfast \
+                -b:v 900k \
+                -c:a aac \
+                "$out"
+
             fi
 
           done
 
-      - name: Create zip
+      - name: Zip
         run: |
-          mkdir -p out
           ts=$(date +"%Y%m%d_%H%M%S")
 
-          zip -r -P "${{ secrets.ZIP_PASSWORD }}" "out/$ts.zip" encoded/
+          zip -r \
+            -P "${{ secrets.ZIP_PASSWORD }}" \
+            "out_$ts.zip" \
+            encoded/
 
-      - name: Upload release
+      - name: Release
         uses: softprops/action-gh-release@v2
+
         with:
           tag_name: media-${{ github.run_number }}
-          files: out/*.zip
+          files: "*.zip"
+
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
