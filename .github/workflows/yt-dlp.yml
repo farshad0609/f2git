@@ -1,4 +1,4 @@
-name: yt-dlp Download + x265 Encode + ZIP
+name: yt-dlp Smart Download + Encode + ZIP
 
 on:
   workflow_dispatch:
@@ -20,66 +20,82 @@ jobs:
         with:
           python-version: '3.11'
 
-      # 📦 نصب yt-dlp و ffmpeg
+      # 📦 Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -U yt-dlp
           sudo apt update
-          sudo apt install -y ffmpeg zip
+          sudo apt install -y ffmpeg zip jq
 
-      # 🎬 دانلود فایل‌ها
+      # 🎬 Download videos
       - name: Download videos
         run: |
           mkdir -p downloads
 
-          yt-dlp \
-            -a yt.txt \
-            -o "downloads/%(title).100s.%(ext)s" \
-            --no-playlist \
-            --restrict-filenames \
-            --merge-output-format mp4 \
-            --retries 3 \
-            --fragment-retries 3 \
-            --concurrent-fragments 5
+          while read url; do
 
-      # 🎞️ Encode به x265
-      - name: Encode videos to x265
+            [ -z "$url" ] && continue
+
+            echo "Processing: $url"
+
+            yt-dlp \
+              -f "bestvideo[height<=480]+bestaudio/best[height<=480]/best" \
+              --merge-output-format mp4 \
+              --restrict-filenames \
+              --write-info-json \
+              -o "downloads/%(title).100s.%(ext)s" \
+              "$url"
+
+          done < yt.txt
+
+      # 🎞️ Encode only videos higher than 480p
+      - name: Encode videos
         run: |
           mkdir -p encoded
 
-          find downloads -type f | while read file; do
+          find downloads -name "*.info.json" | while read jsonfile; do
 
-            ext="${file##*.}"
+            video=$(basename "$jsonfile" .info.json)
 
-            case "$ext" in
-              mp4|mkv|webm|mov|avi|flv)
-                filename=$(basename "$file")
-                output="encoded/${filename%.*}_x265.mp4"
+            resolution=$(jq '.height // 0' "$jsonfile")
 
-                echo "Encoding: $filename"
+            media=$(find downloads -type f | grep "$video" | grep -v ".info.json" | head -n 1)
 
-                ffmpeg -y \
-                  -i "$file" \
-                  -c:v libx265 \
-                  -preset fast \
-                  -crf 28 \
-                  -c:a aac \
-                  -b:a 128k \
-                  "$output"
+            if [ -z "$media" ]; then
+              continue
+            fi
 
-                echo "Removing original: $file"
-                rm -f "$file"
-                ;;
-              *)
-                echo "Skipping non-video: $file"
-                cp "$file" encoded/
-                ;;
-            esac
+            filename=$(basename "$media")
+
+            echo "Detected resolution: $resolution"
+
+            if [ "$resolution" -le 480 ]; then
+
+              echo "Skipping encode for 480p or lower: $filename"
+
+              cp "$media" encoded/
+
+            else
+
+              echo "Encoding higher resolution video: $filename"
+
+              output="encoded/${filename%.*}_x265.mp4"
+
+              ffmpeg -y \
+                -i "$media" \
+                -c:v libx265 \
+                -preset veryfast \
+                -crf 28 \
+                -c:a aac \
+                -b:a 128k \
+                "$output"
+
+            fi
 
           done
 
-      # 🧹 حذف releaseهای قبلی
+      # 🧹 Delete old releases
       - name: Delete old releases
         run: |
           gh release list --json tagName -q '.[].tagName' | while read tag; do
@@ -91,7 +107,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 📦 ساخت ZIP رمزدار
+      # 📦 Create password protected ZIP
       - name: Create ZIP
         env:
           ZIP_PASSWORD: ${{ secrets.ZIP_PASSWORD }}
@@ -108,7 +124,7 @@ jobs:
           cd encoded
           zip -r -P "$ZIP_PASSWORD" "../zipped/${TIMESTAMP}.zip" .
 
-      # 🚀 Release
+      # 🚀 Upload Release
       - name: Create Release
         if: hashFiles('zipped/*.zip') != ''
         uses: softprops/action-gh-release@v2
