@@ -1,4 +1,4 @@
-name: YouTube
+name: Smart Media Downloader
 
 on:
   workflow_dispatch:
@@ -362,6 +362,7 @@ EOF
 
       ##################################################
       # ZIP
+      ##################################################
 
       - name: Create ZIP
         env:
@@ -382,8 +383,9 @@ EOF
           zip -r -P "$ZIP_PASSWORD" \
             "../zipped/${TIMESTAMP}.zip" .
 
-      
+      ##################################################
       # RELEASE
+      ##################################################
 
       - name: Upload Release
         uses: softprops/action-gh-release@v2
