@@ -1,145 +1,151 @@
 name: Smart Media Pipeline
 
-on: workflow_dispatch: inputs:
+on:
+  workflow_dispatch:
+    inputs:
 
-download_engine:
-    description: "Download engine"
-    required: true
-    type: choice
-    options:
-      - yt-dlp
-      - ytconvert
-    default: yt-dlp
+      download_engine:
+        description: "Download engine"
+        required: true
+        type: choice
+        options:
+          - yt-dlp
+          - ytconvert
+        default: yt-dlp
 
-  quality:
-    description: "Preferred quality"
-    required: true
-    type: choice
-    options:
-      - "480"
-      - "720"
-      - "1080"
-      - best
-    default: "480"
+      quality:
+        description: "Preferred quality"
+        required: true
+        type: choice
+        options:
+          - "480"
+          - "720"
+          - "1080"
+          - best
+        default: "480"
 
-  encode_mode:
-    description: "Encode mode"
-    required: true
-    type: choice
-    options:
-      - disabled
-      - x265-veryfast
-      - x264-lite
-      - x264-540p
-    default: x265-veryfast
+      encode_mode:
+        description: "Encode mode"
+        required: true
+        type: choice
+        options:
+          - disabled
+          - x265-veryfast
+          - x264-lite
+          - x264-540p
+        default: x265-veryfast
 
-  min_size_mb:
-    description: "Minimum size for encoding (MB)"
-    required: true
-    default: "350"
+      min_size_mb:
+        description: "Minimum size for encoding (MB)"
+        required: true
+        default: "350"
 
-permissions: contents: write
+permissions:
+  contents: write
 
-jobs: build: runs-on: ubuntu-latest timeout-minutes: 120
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
 
-steps:
+    steps:
 
-  - name: Checkout
-    uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Setup tools
-    run: |
-      sudo apt-get update
-      sudo apt-get install -y ffmpeg zip jq
-      pip install -U yt-dlp requests
+      - name: Setup tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg zip jq
+          pip install -U yt-dlp requests
 
-  - name: Download files
-    run: |
-      mkdir -p downloads
+      - name: Download files
+        run: |
+          mkdir -p downloads
 
-      while read url; do
-        [ -z "$url" ] && continue
+          while read url; do
+            [ -z "$url" ] && continue
 
-        echo "Downloading: $url"
+            echo "Downloading: $url"
 
-        if [[ "${{ github.event.inputs.download_engine }}" == "yt-dlp" ]]; then
+            if [[ "${{ github.event.inputs.download_engine }}" == "yt-dlp" ]]; then
 
-          if [[ "${{ github.event.inputs.quality }}" == "best" ]]; then
-            FORMAT="bestvideo+bestaudio/best"
-          else
-            FORMAT="bestvideo[height<=${{ github.event.inputs.quality }}]+bestaudio/best[height<=${{ github.event.inputs.quality }}]/best"
-          fi
+              if [[ "${{ github.event.inputs.quality }}" == "best" ]]; then
+                FORMAT="bestvideo+bestaudio/best"
+              else
+                FORMAT="bestvideo[height<=${{ github.event.inputs.quality }}]+bestaudio/best[height<=${{ github.event.inputs.quality }}]/best"
+              fi
 
-          yt-dlp -f "$FORMAT" \
-            --merge-output-format mp4 \
-            -o "downloads/%(title).80s.%(ext)s" "$url"
+              yt-dlp -f "$FORMAT" \
+                --merge-output-format mp4 \
+                -o "downloads/%(title).80s.%(ext)s" "$url"
 
-        else
-          echo "ytconvert mode (simple fallback)"
-          yt-dlp -o "downloads/%(title).80s.%(ext)s" "$url"
-        fi
+            else
+              echo "ytconvert mode (simple fallback)"
+              yt-dlp -o "downloads/%(title).80s.%(ext)s" "$url"
+            fi
 
-      done < yt.txt
+          done < yt.txt
 
-  - name: Encode videos
-    run: |
-      mkdir -p encoded
+      - name: Encode videos
+        run: |
+          mkdir -p encoded
 
-      MODE="${{ github.event.inputs.encode_mode }}"
-      MIN_SIZE=${{ github.event.inputs.min_size_mb }}
+          MODE="${{ github.event.inputs.encode_mode }}"
+          MIN_SIZE=${{ github.event.inputs.min_size_mb }}
 
-      for file in downloads/*; do
+          for file in downloads/*; do
 
-        [ -f "$file" ] || continue
+            [ -f "$file" ] || continue
 
-        size_mb=$(du -m "$file" | cut -f1)
+            size_mb=$(du -m "$file" | cut -f1)
 
-        if [[ "$MODE" == "disabled" ]]; then
-          cp "$file" encoded/
-          continue
-        fi
+            if [[ "$MODE" == "disabled" ]]; then
+              cp "$file" encoded/
+              continue
+            fi
 
-        if [[ "$size_mb" -lt "$MIN_SIZE" ]]; then
-          cp "$file" encoded/
-          continue
-        fi
+            if [[ "$size_mb" -lt "$MIN_SIZE" ]]; then
+              cp "$file" encoded/
+              continue
+            fi
 
-        bitrate=$(ffprobe -v error -select_streams v:0 \
-          -show_entries stream=bit_rate -of default=nk=1:nw=1 "$file")
+            bitrate=$(ffprobe -v error -select_streams v:0 \
+              -show_entries stream=bit_rate -of default=nk=1:nw=1 "$file")
 
-        bitrate_k=$((bitrate/1000))
+            bitrate_k=$((bitrate/1000))
 
-        if [[ "$bitrate_k" -lt 900 ]]; then
-          cp "$file" encoded/
-          continue
-        fi
+            if [[ "$bitrate_k" -lt 900 ]]; then
+              cp "$file" encoded/
+              continue
+            fi
 
-        name=$(basename "$file")
-        out="encoded/${name%.*}_enc.mp4"
+            name=$(basename "$file")
+            out="encoded/${name%.*}_enc.mp4"
 
-        if [[ "$MODE" == "x265-veryfast" ]]; then
-          ffmpeg -y -i "$file" -c:v libx265 -preset veryfast -crf 28 -c:a aac "$out"
+            if [[ "$MODE" == "x265-veryfast" ]]; then
+              ffmpeg -y -i "$file" -c:v libx265 -preset veryfast -crf 28 -c:a aac "$out"
 
-        elif [[ "$MODE" == "x264-lite" ]]; then
-          ffmpeg -y -i "$file" -c:v libx264 -preset veryfast -b:v 1000k -c:a aac "$out"
+            elif [[ "$MODE" == "x264-lite" ]]; then
+              ffmpeg -y -i "$file" -c:v libx264 -preset veryfast -b:v 1000k -c:a aac "$out"
 
-        elif [[ "$MODE" == "x264-540p" ]]; then
-          ffmpeg -y -i "$file" -vf scale=-2:540 -c:v libx264 -preset veryfast -b:v 900k -c:a aac "$out"
-        fi
+            elif [[ "$MODE" == "x264-540p" ]]; then
+              ffmpeg -y -i "$file" -vf scale=-2:540 -c:v libx264 -preset veryfast -b:v 900k -c:a aac "$out"
+            fi
 
-      done
+          done
 
-  - name: Create zip
-    run: |
-      mkdir -p out
-      ts=$(date +"%Y%m%d_%H%M%S")
+      - name: Create zip
+        run: |
+          mkdir -p out
+          ts=$(date +"%Y%m%d_%H%M%S")
 
-      zip -r -P "${{ secrets.ZIP_PASSWORD }}" "out/$ts.zip" encoded/
+          zip -r -P "${{ secrets.ZIP_PASSWORD }}" "out/$ts.zip" encoded/
 
-  - name: Upload release
-    uses: softprops/action-gh-release@v2
-    with:
-      tag_name: media-${{ github.run_number }}
-      files: out/*.zip
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: media-${{ github.run_number }}
+          files: out/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
