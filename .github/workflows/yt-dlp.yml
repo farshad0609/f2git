@@ -362,7 +362,6 @@ EOF
 
       ##################################################
       # ZIP
-      ##################################################
 
       - name: Create ZIP
         env:
@@ -383,9 +382,8 @@ EOF
           zip -r -P "$ZIP_PASSWORD" \
             "../zipped/${TIMESTAMP}.zip" .
 
-      ##################################################
+      
       # RELEASE
-      ##################################################
 
       - name: Upload Release
         uses: softprops/action-gh-release@v2
@@ -395,4 +393,3 @@ EOF
           files: zipped/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
