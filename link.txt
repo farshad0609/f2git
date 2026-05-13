@@ -1,1 +1,1 @@
-https://github.com/ProAlit/aio-downloader/blob/main/telegram/content/DEJradio_4611_1778669249.mp4
+https://github.com/ProAlit/aio-downloader/raw/refs/heads/main/telegram/content/DEJradio_4611_1778669249.mp4
