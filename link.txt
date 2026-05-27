@@ -1,1 +1,3 @@
-https://github.com/ProAlit/aio-downloader/raw/refs/heads/main/telegram/content/DEJradio_4611_1778669249.mp4
+https://github.com/patterniha/MITM-DomainFronting/archive/refs/tags/v21.zip
+https://github.com/patterniha/MITM-DomainFronting/archive/refs/tags/v19.zip
+https://github.com/patterniha/SNI-Spoofing/releases/download/v1.0/SNI-Spoofing_by_patterniha_v1.rar
