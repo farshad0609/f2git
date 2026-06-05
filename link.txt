@@ -1,3 +1,5 @@
-https://github.com/patterniha/MITM-DomainFronting/archive/refs/tags/v21.zip
-https://github.com/patterniha/MITM-DomainFronting/archive/refs/tags/v19.zip
-https://github.com/patterniha/SNI-Spoofing/releases/download/v1.0/SNI-Spoofing_by_patterniha_v1.rar
+https://github.com/hamedcode/f2git/releases/download/browser-31/Source.mp4
+https://github.com/hamedcode/f2git/releases/download/media-57/X265.540p.mp4
+https://github.com/hamedcode/f2git/releases/download/media-58/X265.720.crf.28.veryfast.mp4
+https://github.com/hamedcode/f2git/releases/download/media-59/X265.720.crf.27.fast.x2.mp4
+https://github.com/hamedcode/f2git/releases/download/media-60/720p.av1.mp4
