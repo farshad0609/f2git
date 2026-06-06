@@ -1,2 +1,2 @@
 https://github.com/hamedcode/f2git/releases/download/media-59/X265.720.crf.27.fast.x2.mp4
-https://github.com/hamedcode/f2git/releases/download/media-61/x265.360.CRF.30.x2
+https://github.com/hamedcode/f2git/releases/download/media-61/x265.360.CRF.30.x2.mp4
