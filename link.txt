@@ -1,4 +1,2 @@
-https://github.com/hamedcode/f2git/releases/download/browser-31/Source.mp4
-https://github.com/hamedcode/f2git/releases/download/media-57/X265.540p.mp4
-https://github.com/hamedcode/f2git/releases/download/media-58/X265.720.crf.28.veryfast.mp4
-https://github.com/hamedcode/f2git/releases/download/media-60/720p.av1.mp4
+https://github.com/hamedcode/f2git/releases/download/media-59/X265.720.crf.27.fast.x2.mp4
+https://github.com/hamedcode/f2git/releases/download/media-61/x265.360.CRF.30.x2
