@@ -130,7 +130,7 @@ jobs:
             bitrate=${bitrate:-0}
             bitrate_k=$((bitrate / 1000))
 
-            if [[ "$bitrate_k" -lt 900 ]]; then
+            if [[ "$bitrate_k" -lt 100 ]]; then
               echo "Skipping encode (bitrate too low): $file"
               cp "$file" encoded/
               continue
