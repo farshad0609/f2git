@@ -180,9 +180,9 @@ jobs:
                 -i "$file" \
                 -c:v libx265 \
                 -preset fast \
-                -crf 29 \
+                -crf 28 \
                 -x265-params no-sao=1:aq-mode=3:bframes=4:keyint=240 \
-                -c:a aac -b:a 80k \
+                -c:a aac -b:a 96k \
                 "$output"
 
 
